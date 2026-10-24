@@ -65,7 +65,25 @@ function normalizeEnvelopeProfiles(profiles = {}, normalize) {
   return normalized;
 }
 
+// Settings stores are read on every remote key press (Home focus, hero and
+// layout code ask for layout preferences several times per step). Parsing,
+// normalizing and re-stringifying the whole envelope each time is measurable
+// main-thread work on TV CPUs, so keep the normalized envelope until
+// LocalStore reports a write to that key.
+const envelopeCache = new Map();
+
 function readEnvelope(key, normalize, legacyProfileIds = null) {
+  const revision = LocalStore.revision(key);
+  const cached = envelopeCache.get(key);
+  if (cached && cached.revision === revision && cached.normalize === normalize) {
+    return cached.envelope;
+  }
+  const envelope = readStoredEnvelope(key, normalize, legacyProfileIds);
+  envelopeCache.set(key, { revision: LocalStore.revision(key), normalize, envelope });
+  return envelope;
+}
+
+function readStoredEnvelope(key, normalize, legacyProfileIds) {
   const raw = LocalStore.get(key, null);
   if (isProfileScopedEnvelope(raw)) {
     const next = {
