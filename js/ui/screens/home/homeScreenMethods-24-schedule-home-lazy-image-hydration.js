@@ -1,4 +1,5 @@
 import * as internals from "./homeScreenContext.js";
+import { getCachedHomePoster, getHomePosterTargetWidth, resolveHomePoster } from "./homePosterDownscale.js";
 
 export function createHomeScreenMethods24() {
   const {
@@ -13,10 +14,31 @@ export function createHomeScreenMethods24() {
     isCompletedForContinueWatching,
     episodeKey,
     episodeSortKey,
-    buildNextUpSeedFromWatchedItem
+    buildNextUpSeedFromWatchedItem,
+    Platform
   } = internals;
 
   return {
+    assignHomeLazyImageSource(image, src, { urgent = false } = {}) {
+      image.loading = "eager";
+      image.removeAttribute("data-src");
+      const targetWidth = Platform.isTizen() ? getHomePosterTargetWidth(image) : 0;
+      if (!targetWidth) {
+        image.src = src;
+        return;
+      }
+      const cached = getCachedHomePoster(src, targetWidth);
+      if (cached) {
+        image.src = cached;
+        return;
+      }
+      void resolveHomePoster(src, targetWidth, { urgent }).then((resolvedSrc) => {
+        // A re-render that changed this card queues a new data-src; that pass owns it.
+        if (image.isConnected && !image.getAttribute("data-src") && !image.getAttribute("src")) {
+          image.src = resolvedSrc;
+        }
+      });
+    },
     shouldUseBoundedHomeImageHydration() {
       // Keep image prefetch bounded on TV independently of the animated scroll policy.
       return Boolean(this.isPerformanceConstrained() || getTvRuntimePerformanceProfile().isTvRuntime);
@@ -251,10 +273,8 @@ export function createHomeScreenMethods24() {
       if (this.isLegacyTvRuntime()) {
         this.commitHomeLazyImageSources(pendingLoads, anchorNode, anchorRow);
       } else {
-        pendingLoads.forEach(({ image, src }) => {
-          image.loading = "eager";
-          image.removeAttribute("data-src");
-          image.src = src;
+        pendingLoads.forEach(({ image, src, isFocusedRow }) => {
+          this.assignHomeLazyImageSource(image, src, { urgent: isFocusedRow });
         });
       }
     },
@@ -296,7 +316,7 @@ export function createHomeScreenMethods24() {
         this.homeLazyImageCommitRaf = 0;
         let assigned = 0;
         while (pending.length && assigned < HOME_LEGACY_LAZY_HYDRATION_MAX_PER_FRAME) {
-          const { image, src } = pending.shift();
+          const { image, src, isFocusedRow } = pending.shift();
           if (!(image instanceof HTMLImageElement) || !image.isConnected) {
             continue;
           }
@@ -304,9 +324,7 @@ export function createHomeScreenMethods24() {
           if (!currentSrc) {
             continue;
           }
-          image.loading = "eager";
-          image.removeAttribute("data-src");
-          image.src = currentSrc || src;
+          this.assignHomeLazyImageSource(image, currentSrc || src, { urgent: isFocusedRow });
           assigned += 1;
         }
         if (pending.length) {

@@ -279,7 +279,9 @@ export function buildLazyImageAttributes(src = "", { defer = false, highPriority
   // Lazy everywhere except explicit hero priority; near-viewport images
   // still resolve immediately via the hydration pass.
   const loadingMode = highPriority ? "eager" : "lazy";
-  if (defer) {
+  // Tizen: every Home card image goes through the hydration pass, which hands
+  // oversized posters a card-sized copy instead of the original file.
+  if (defer || (!highPriority && getTvRuntimePerformanceProfile().platform === "tizen")) {
     return `data-src="${safeSrc}" loading="${loadingMode}" decoding="async"${priority}`;
   }
   return `src="${safeSrc}" loading="${loadingMode}" decoding="async"${priority}`;
