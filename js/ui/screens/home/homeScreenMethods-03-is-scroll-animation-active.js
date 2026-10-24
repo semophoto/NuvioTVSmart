@@ -292,7 +292,10 @@ export function createHomeScreenMethods03() {
         const collectionCount = Array.isArray(this.collections) ? this.collections.length : 0;
         return collectionCount > 2 ? HOME_BACKGROUND_RENDER_DELAY_LEGACY_MS + 140 : HOME_BACKGROUND_RENDER_DELAY_LEGACY_MS;
       }
-      if (this.isPerformanceConstrained()) {
+      // Tizen rebuilds every row's markup per Home render. Without a delay each
+      // catalog response repaints the full Home on the next frame, so a large
+      // addon set causes dozens of rebuilds while the user is navigating.
+      if (this.isPerformanceConstrained() || Platform.isTizen()) {
         return HOME_BACKGROUND_RENDER_DELAY_MS;
       }
       return 0;
