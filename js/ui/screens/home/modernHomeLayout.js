@@ -54,10 +54,15 @@ export function renderModernHomeLayout({
   shouldDeferRowImages,
   watchedTitleIds = null,
   escapeHtml,
-  escapeAttribute
+  escapeAttribute,
+  liveRowMarkup = null
 } = {}) {
   const catalogSeeAllMap = new Map();
   const sectionsMarkup = [];
+  // Rows whose markup matches what the live DOM already holds are sent to the
+  // DOM diff as empty placeholders, so a refresh parses only rows that changed.
+  const diffSectionsMarkup = [];
+  const rowMarkupByKey = new Map();
   const posterSettings = LayoutPreferences.get();
 
   rows.forEach((rowData, rowIndex) => {
@@ -122,7 +127,7 @@ export function renderModernHomeLayout({
       )
       .join("");
 
-    sectionsMarkup.push(`
+    const sectionMarkup = `
       <section class="home-row home-modern-row home-row-enter" data-row-key="${escapeHtml(rowKey)}" data-row-index="${rowIndex}">
         <div class="home-row-head">
           <h2 class="home-row-title">${escapeHtml(rowTitle)}</h2>
@@ -131,12 +136,18 @@ export function renderModernHomeLayout({
           ${cardsMarkup}
         </div>
       </section>
-    `);
+    `;
+    sectionsMarkup.push(sectionMarkup);
+    rowMarkupByKey.set(rowKey, sectionMarkup);
+    diffSectionsMarkup.push(
+      liveRowMarkup?.get(rowKey) === sectionMarkup
+        ? `<section data-row-key="${escapeHtml(rowKey)}" data-home-dom-keep="1"></section>`
+        : sectionMarkup
+    );
   });
 
-  return {
-    catalogSeeAllMap,
-    markup: `
+  const rowsMarker = "\u0000home-modern-rows\u0000";
+  const stageMarkup = `
       <section class="home-modern-stage">
         ${
           showHeroSection
@@ -174,12 +185,21 @@ export function renderModernHomeLayout({
               cardStyle: continueWatchingCardStyle
             })}
             <div class="home-modern-catalogs">
-              ${sectionsMarkup.join("")}
+              ${rowsMarker}
             </div>
           </div>
         </div>
       </section>
-    `
+    `;
+  // Everything after the marker is static, so the last occurrence is ours.
+  const markerAt = stageMarkup.lastIndexOf(rowsMarker);
+  const stageHead = stageMarkup.slice(0, markerAt);
+  const stageTail = stageMarkup.slice(markerAt + rowsMarker.length);
+  return {
+    catalogSeeAllMap,
+    rowMarkupByKey,
+    markup: stageHead + sectionsMarkup.join("") + stageTail,
+    diffMarkup: stageHead + diffSectionsMarkup.join("") + stageTail
   };
 }
 

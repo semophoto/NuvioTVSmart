@@ -203,7 +203,8 @@ export function createHomeScreenMethods23() {
           shouldDeferRowImages: shouldDeferHomeRowImages,
           watchedTitleIds: this.watchedTitleIds,
           escapeHtml,
-          escapeAttribute
+          escapeAttribute,
+          liveRowMarkup: canUpdateInPlace ? this.renderedRowMarkup : null
         });
         this.catalogSeeAllMap = modernLayoutPayload.catalogSeeAllMap;
         mainContentMarkup = modernLayoutPayload.markup;
@@ -266,24 +267,27 @@ export function createHomeScreenMethods23() {
       }
       const sidebarFocusLocked = Boolean(this.sidebarExpanded && retainedFocusState?.focusKind === "sidebar");
 
-      const nextMarkup = `
+      const sidebarMarkup = renderRootSidebar({
+        selectedRoute: "home",
+        profile: this.sidebarProfile,
+        layout: this.layoutPrefs,
+        expanded: Boolean(this.sidebarExpanded),
+        pillIconOnly: Boolean(this.pillIconOnly)
+      });
+      const holdMenuMarkup = this.renderActiveHoldMenu();
+      const buildShellMarkup = (contentMarkup) => `
           <div class="home-shell home-screen-shell ${layoutClass}"${sizingStyle ? ` style="${escapeAttribute(sizingStyle)}"` : ""}>
-            ${renderRootSidebar({
-              selectedRoute: "home",
-              profile: this.sidebarProfile,
-              layout: this.layoutPrefs,
-              expanded: Boolean(this.sidebarExpanded),
-              pillIconOnly: Boolean(this.pillIconOnly)
-            })}
+            ${sidebarMarkup}
 
             <main class="home-main home-screen-main">
               <div class="home-route-content${routeEnterClass}">
-                ${mainContentMarkup}
+                ${contentMarkup}
               </div>
             </main>
           </div>
-          ${this.renderActiveHoldMenu()}
+          ${holdMenuMarkup}
         `;
+      const nextMarkup = buildShellMarkup(mainContentMarkup);
 
       // Returning to Home re-renders several times as cached rows, the background
       // refresh and the catalog rows each land. When a pass produces markup the
@@ -304,11 +308,14 @@ export function createHomeScreenMethods23() {
           this.cancelFocusedPosterFlow();
           this.expandedPosterNode = null;
         }
+        const diffMarkup = canUpdateInPlace && modernLayoutPayload?.diffMarkup ? buildShellMarkup(modernLayoutPayload.diffMarkup) : "";
         updatedInPlace = updateHomeDom(this.container, nextMarkup, {
           incremental: canUpdateInPlace,
-          focusedNode: liveFocusedNode
+          focusedNode: liveFocusedNode,
+          diffMarkup
         });
         this.renderedMarkup = nextMarkup;
+        this.renderedRowMarkup = modernLayoutPayload?.rowMarkupByKey || null;
       }
       if (this.layoutMode === "grid") {
         normalizeHomeGridCatalogSections(this.container, {

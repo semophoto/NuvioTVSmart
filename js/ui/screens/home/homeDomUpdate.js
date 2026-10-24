@@ -135,6 +135,13 @@ function updateChildren(parent, source, protectedNode) {
   });
   const desired = children(source).map((child) => {
     const candidates = available.get(key(child));
+    if (child.nodeType === 1 && child.hasAttribute("data-home-dom-keep")) {
+      // The caller verified this row's markup is unchanged: keep the live row.
+      const kept = candidates?.find((node) => node.nodeType === 1);
+      if (!kept) throw KEEP_MISS;
+      candidates.splice(candidates.indexOf(kept), 1);
+      return kept;
+    }
     const existing = candidates?.find(
       (node) => node.nodeType === child.nodeType && node.nodeName === child.nodeName
     );
@@ -179,6 +186,8 @@ function updateChildren(parent, source, protectedNode) {
   }
 }
 
+const KEEP_MISS = new Error("home-dom-keep target missing");
+
 let inertDocument = null;
 
 // The comparison tree is parsed in a document without a browsing context, so its
@@ -190,13 +199,26 @@ function createSourceRoot(ownerDocument) {
   return inertDocument.createElement("div");
 }
 
-export function updateHomeDom(container, markup, { incremental = false, focusedNode = null } = {}) {
+export function updateHomeDom(
+  container,
+  markup,
+  { incremental = false, focusedNode = null, diffMarkup = "" } = {}
+) {
   const source = createSourceRoot(container.ownerDocument);
-  source.innerHTML = markup;
   const canUpdate = incremental && hasMountedHomeDom(container);
   if (canUpdate) {
-    updateChildren(container, source, focusedNode);
+    source.innerHTML = diffMarkup || markup;
+    try {
+      updateChildren(container, source, focusedNode);
+    } catch (error) {
+      if (error !== KEEP_MISS) throw error;
+      // Every node touched so far was recorded against its new source, so a
+      // second pass with the full markup still diffs from a consistent state.
+      source.innerHTML = markup;
+      updateChildren(container, source, focusedNode);
+    }
   } else {
+    source.innerHTML = markup;
     container.innerHTML = markup;
     remember(container, source);
   }
