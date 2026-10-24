@@ -57,18 +57,93 @@ function encode(bitmap) {
   );
 }
 
-async function downscale(src, targetWidth) {
+async function downscaleToBlob(src, targetWidth) {
   const response = await fetch(src, { credentials: "omit" });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const blob = await response.blob();
-  if (blob.size < MIN_DOWNSCALE_BYTES) return src;
+  if (blob.size < MIN_DOWNSCALE_BYTES) return null;
   // Giving only resizeWidth keeps the aspect ratio.
-  const bitmap = await createImageBitmap(blob, { resizeWidth: targetWidth, resizeQuality: "high" });
+  const bitmap = await createImageBitmap(blob, {
+    resizeWidth: targetWidth,
+    resizeQuality: "medium"
+  });
   try {
-    return URL.createObjectURL(await encode(bitmap));
+    return await encode(bitmap);
   } finally {
     bitmap.close?.();
   }
+}
+
+// The resize is off-thread already, but the JPEG encode measured 400-800 ms
+// on the page thread on the TV. Run the whole job in a worker when possible.
+const WORKER_SOURCE = `
+const MIN_DOWNSCALE_BYTES = ${MIN_DOWNSCALE_BYTES};
+self.onmessage = async (event) => {
+  const { id, src, targetWidth } = event.data;
+  try {
+    const response = await fetch(src, { credentials: "omit" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const blob = await response.blob();
+    if (blob.size < MIN_DOWNSCALE_BYTES) return self.postMessage({ id, blob: null });
+    const bitmap = await createImageBitmap(blob, { resizeWidth: targetWidth, resizeQuality: "medium" });
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0);
+    bitmap.close();
+    self.postMessage({ id, blob: await canvas.convertToBlob({ type: "image/jpeg", quality: 0.9 }) });
+  } catch (error) {
+    self.postMessage({ id, error: String(error && error.message || error) });
+  }
+};
+`;
+
+let worker;
+let workerSeq = 0;
+const workerJobs = new Map();
+
+function getWorker() {
+  if (worker !== undefined) return worker;
+  worker = null;
+  try {
+    if (typeof Worker === "function" && typeof OffscreenCanvas === "function") {
+      const url = URL.createObjectURL(new Blob([WORKER_SOURCE], { type: "text/javascript" }));
+      worker = new Worker(url);
+      worker.onmessage = ({ data }) => {
+        const job = workerJobs.get(data.id);
+        if (!job) return;
+        workerJobs.delete(data.id);
+        if (data.error) job.reject(new Error(data.error));
+        else job.resolve(data.blob);
+      };
+      worker.onerror = () => {
+        // A worker that cannot run here falls back to the page thread.
+        worker = null;
+        workerJobs.forEach((job) => job.fallback());
+        workerJobs.clear();
+      };
+    }
+  } catch (_) {
+    worker = null;
+  }
+  return worker;
+}
+
+function downscaleInWorker(src, targetWidth) {
+  const activeWorker = getWorker();
+  if (!activeWorker) return downscaleToBlob(src, targetWidth);
+  return new Promise((resolve, reject) => {
+    const id = ++workerSeq;
+    workerJobs.set(id, {
+      resolve,
+      reject,
+      fallback: () => downscaleToBlob(src, targetWidth).then(resolve, reject)
+    });
+    activeWorker.postMessage({ id, src, targetWidth });
+  });
+}
+
+async function downscale(src, targetWidth) {
+  const blob = await downscaleInWorker(src, targetWidth);
+  return blob ? URL.createObjectURL(blob) : src;
 }
 
 function pump() {
