@@ -351,3 +351,21 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* Home poster focus ring: the frame (a child of the focusable card) eased
+   border, background and box-shadow on every move, repainting the old and
+   new card for ~8 frames per press. Snap the ring like other focus states. */
+.legacy-tizen .home-screen-shell .home-poster-frame {
+  transition: none !important;
+}
+
+/* Settings re-slid the whole content panel on every section step, and the
+   hero backdrop ran a full-screen brightness/saturate filter while it faded
+   in. Both are per-press paint work on Samsung panels. */
+.legacy-tizen .settings-content.is-section-transitioning {
+  animation: none !important;
+}
+
+.legacy-tizen .home-screen-shell .home-hero-backdrop {
+  filter: none !important;
+}

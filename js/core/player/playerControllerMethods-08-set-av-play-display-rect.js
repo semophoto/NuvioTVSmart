@@ -195,6 +195,15 @@ export function createPlayerControllerMethods08() {
       } catch (_) {
         // Ignore unsupported AVPlay header properties.
       }
+      // Samsung caps adaptive (HLS/DASH) streams at FHD unless the player is
+      // put in 4K mode between open() and prepare(). Only UHD panels accept it.
+      try {
+        if (Platform.isTizen() && globalThis.webapis?.productinfo?.isUdPanelSupported?.() === true) {
+          avplay.setStreamingProperty("SET_MODE_4K", "TRUE");
+        }
+      } catch (_) {
+        // Older firmware or FHD panels reject the 4K streaming mode.
+      }
     },
     configureAvPlayBuffering() {
       const avplay = this.getAvPlay();
