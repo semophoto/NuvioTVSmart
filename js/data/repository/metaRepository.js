@@ -21,6 +21,13 @@ function firstNonBlank(...values) {
   return null;
 }
 
+// Metas whose addon sent no name; mapMeta fills "Untitled" for display only.
+const namelessMetas = new WeakSet();
+
+export function isNamelessMeta(meta) {
+  return Boolean(meta) && typeof meta === "object" && namelessMetas.has(meta);
+}
+
 class MetaRepository {
   constructor() {
     this.metaCache = new Map();
@@ -197,6 +204,7 @@ class MetaRepository {
         });
       }
 
+      let namelessFallback = null;
       for (const { addon, type: candidateType } of candidates) {
         // Android treats the catalog/source addon as sufficient for a
         // recommendation candidate: it uses the candidate preview metadata
@@ -212,11 +220,21 @@ class MetaRepository {
         }
         const result = await this.getMeta(addon.baseUrl, candidateType, id);
         if (result.status === "success") {
+          // Some stream addons answer meta requests with an id-only stub.
+          // Keep looking for an addon that knows the title before using it.
+          if (isNamelessMeta(result.data)) {
+            namelessFallback = namelessFallback || result;
+            continue;
+          }
           this.metaCache.set(cacheKey, result.data);
           return result;
         }
       }
 
+      if (namelessFallback) {
+        this.metaCache.set(cacheKey, namelessFallback.data);
+        return namelessFallback;
+      }
       return { status: "error", message: "Meta not found in installed addons", code: 404 };
     })();
 
@@ -342,7 +360,7 @@ class MetaRepository {
           ? meta.appExtras
           : {};
 
-    return {
+    const mapped = {
       ...meta,
       id: meta.id || "",
       type: meta.type || "",
@@ -364,6 +382,10 @@ class MetaRepository {
         meta.age_rating
       )
     };
+    if (!String(meta.name || "").trim()) {
+      namelessMetas.add(mapped);
+    }
+    return mapped;
   }
 
   clearCache() {

@@ -72,7 +72,13 @@ export function createHomeScreenMethods27() {
                 : null;
               const enriched = {
                 ...item,
-                title: enrichedMeta.name || prettyId(item.contentId),
+                // "Untitled" is metaRepository's placeholder for a nameless
+                // addon meta; the synced progress title is better than that.
+                title: firstNonEmpty(
+                  enrichedMeta.name === "Untitled" ? "" : enrichedMeta.name,
+                  item.title === "Untitled" ? "" : item.title,
+                  prettyId(item.contentId)
+                ),
                 landscapePoster:
                   enrichedMeta.landscapePoster || enrichedMeta.thumbnail || enrichedMeta.backdrop || enrichedMeta.background || null,
                 episodeThumbnail: episodeEntry?.thumbnail || enrichedMeta.episodeThumbnail || item.episodeThumbnail || null,
