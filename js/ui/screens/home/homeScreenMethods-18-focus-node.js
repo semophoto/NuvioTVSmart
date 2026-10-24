@@ -49,6 +49,7 @@ export function createHomeScreenMethods18() {
         }
         this.scheduleModernTrackPaginationForFocus(target);
         this.ensureContinueWatchingRenderAhead(target);
+        this.maybeExpandModernRowWindow(target);
         if (shouldDeferFocusEffects) {
           this.cancelPendingHeroFocus();
           this.cancelFocusedPosterFlow();

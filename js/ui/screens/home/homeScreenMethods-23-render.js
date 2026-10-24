@@ -34,10 +34,63 @@ export function createHomeScreenMethods23() {
     getHomeGridRowCount,
     normalizeHomeGridCatalogSections,
     shouldDeferHomeRowImages,
-    createPosterCardMarkup
+    createPosterCardMarkup,
+    Platform,
+    Router
   } = internals;
 
+  // Large addon sets can expose 100+ catalog rows. Every Home render rebuilds
+  // and diffs each mounted row, so on Tizen mount a window of rows and grow it
+  // as focus approaches the last mounted row.
+  const MODERN_ROW_WINDOW_INITIAL = 10;
+  const MODERN_ROW_WINDOW_STEP = 8;
+  const MODERN_ROW_WINDOW_LOOKAHEAD = 4;
+
   return {
+    usesModernRowWindow() {
+      return this.layoutMode === "modern" && Platform.isTizen();
+    },
+    getModernWindowedRows(focusRowKey = "") {
+      const rows = Array.isArray(this.rows) ? this.rows : [];
+      if (!this.usesModernRowWindow()) {
+        return rows;
+      }
+      let windowSize = Math.max(MODERN_ROW_WINDOW_INITIAL, Number(this.modernRowWindowSize || 0));
+      if (focusRowKey) {
+        const focusIndex = rows.findIndex((row) => String(row?.homeCatalogKey || "") === focusRowKey);
+        if (focusIndex >= 0) {
+          windowSize = Math.max(windowSize, focusIndex + 1 + MODERN_ROW_WINDOW_LOOKAHEAD);
+        }
+      }
+      this.modernRowWindowSize = windowSize;
+      return rows.length > windowSize ? rows.slice(0, windowSize) : rows;
+    },
+    maybeExpandModernRowWindow(target) {
+      if (!this.usesModernRowWindow() || !(target instanceof HTMLElement)) {
+        return;
+      }
+      const section = target.closest(".home-modern-row");
+      if (!section) {
+        return;
+      }
+      const rowIndex = Number(section.dataset.rowIndex);
+      const mounted = Math.min(Number(this.modernRowWindowSize || 0), Number(this.rows?.length || 0));
+      if (!Number.isFinite(rowIndex) || mounted >= Number(this.rows?.length || 0)) {
+        return;
+      }
+      if (rowIndex + MODERN_ROW_WINDOW_LOOKAHEAD >= mounted) {
+        this.modernRowWindowSize = mounted + MODERN_ROW_WINDOW_STEP;
+        if (rowIndex >= mounted - 1) {
+          // Focus reached the last mounted row: the input-idle deferral would
+          // leave Down with nowhere to go, so mount the next rows right away.
+          setTimeout(() => {
+            if (this.container && Router.getCurrent() === "home") this.render();
+          }, 0);
+        } else {
+          this.requestRender();
+        }
+      }
+    },
     render() {
       const renderStart = HOME_PERF_DEBUG ? homePerfNow() : 0;
       this.cancelScheduledRender();
@@ -175,7 +228,7 @@ export function createHomeScreenMethods23() {
         this.catalogSeeAllMap = new Map();
       } else if (this.layoutMode === "modern") {
         modernLayoutPayload = renderModernHomeLayout({
-          rows: this.rows,
+          rows: this.getModernWindowedRows(String(rawRetainedFocusState?.rowKey || focusState?.rowKey || "")),
           heroItem,
           heroCandidates: this.heroCandidates,
           continueWatchingItems: continueWatchingRows.main,
