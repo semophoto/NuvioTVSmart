@@ -17,6 +17,9 @@ export function createHomeScreenMethods13() {
         frame.allow = "autoplay; encrypted-media; picture-in-picture";
         frame.allowFullscreen = true;
         frame.referrerPolicy = "strict-origin-when-cross-origin";
+        // Keep D-pad focus out of the embed so YouTube never shows its
+        // hover/keyboard controls over the preview.
+        frame.tabIndex = -1;
         let revealTimer = 0;
         let fallbackTimer = 0;
         let revealed = false;

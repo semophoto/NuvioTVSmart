@@ -1,0 +1,90 @@
+/* Continue Watching poster-style cards are ~230px wide; the modern sizes
+   (24/28/24px) were tuned for the wide landscape card and crowd the art. */
+.home-screen-shell.home-layout-modern .home-row-continue-poster .home-continue-copy {
+  left: 14px;
+  right: 14px;
+  bottom: 16px;
+}
+
+.home-screen-shell.home-layout-modern .home-row-continue-poster .home-continue-kicker {
+  font-size: 14px;
+  line-height: 1.3;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.home-screen-shell.home-layout-modern .home-row-continue-poster .home-continue-title {
+  font-size: 18px;
+  line-height: 1.25;
+  letter-spacing: 0;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.home-screen-shell.home-layout-modern .home-row-continue-poster .home-continue-subtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-screen-shell.home-layout-modern .home-row-continue-poster .home-continue-badge {
+  top: 10px;
+  right: 10px;
+  min-height: 22px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+/* Poster placeholder: while a card's image has no src yet (lazy hydration or
+   the downscaled copy is pending) show the title on a quiet gradient instead
+   of the browser's broken-image icon. The loaded poster covers it. */
+.home-screen-shell .home-poster-card .content-poster:not([src]) {
+  opacity: 0;
+}
+
+.home-screen-shell .home-poster-fallback-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 14px 12px;
+  background: linear-gradient(160deg, #2a2a2e 0%, #17171a 55%, #0e0e10 100%);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* YouTube draws its title bar, logo and "More videos" shelf at the iframe
+   edges. Make the frame twice as tall as the layer and centre it: the video
+   is letterboxed to the layer's width, so it still fills the layer while the
+   YouTube chrome falls outside the clipped area. */
+.home-screen-shell .home-poster-trailer-layer {
+  overflow: hidden;
+}
+
+.home-screen-shell .home-poster-trailer-layer .home-inline-trailer-frame,
+.home-screen-shell.home-layout-modern
+  .home-modern-hero-media
+  .home-hero-trailer-layer
+  .home-inline-trailer-frame {
+  position: absolute;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  top: -50%;
+  width: 100%;
+  height: 200%;
+  pointer-events: none;
+}

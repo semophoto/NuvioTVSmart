@@ -241,7 +241,7 @@ export function createPosterCardMarkup(
         ? `<div class="home-collection-title-overlay" dir="auto">${escapeHtml(collectionDisplayTitle)}</div>`
         : "";
     const contentMarkup = visualSrc
-      ? `<img class="content-poster" ${buildLazyImageAttributes(visualSrc, { defer: deferImages })} alt="${escapeAttribute(collectionItem.name || collectionItem.heroTitle || collectionItem.collectionTitle || "collection")}" />`
+      ? `<img class="content-poster" ${buildLazyImageAttributes(visualSrc, { defer: deferImages })} alt="" />`
       : collectionItem.coverEmoji
         ? `<div class="home-collection-emoji" aria-hidden="true">${escapeHtml(collectionItem.coverEmoji)}</div>`
         : '<div class="content-poster placeholder"></div>';
@@ -353,7 +353,7 @@ export function createPosterCardMarkup(
       <div class="home-poster-frame">
         ${
           !isLoading && posterSrc
-            ? `<img class="content-poster" ${buildLazyImageAttributes(posterSrc, { defer: deferImages })} alt="${escapeAttribute(normalized.name || "content")}" data-original-poster="${escapeAttribute((useLandscapePoster ? normalized.rawLandscapePosterUrl : normalized.rawPosterUrl) || "")}" />`
+            ? `<div class="home-poster-fallback-title" aria-hidden="true">${escapeHtml(normalized.name || "")}</div><img class="content-poster" ${buildLazyImageAttributes(posterSrc, { defer: deferImages })} alt="" data-original-poster="${escapeAttribute((useLandscapePoster ? normalized.rawLandscapePosterUrl : normalized.rawPosterUrl) || "")}" />`
             : '<div class="content-poster placeholder"></div>'
         }
         ${
