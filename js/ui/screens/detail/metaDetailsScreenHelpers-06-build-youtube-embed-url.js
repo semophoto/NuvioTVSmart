@@ -1,3 +1,4 @@
+import { findDirectTrailerSource } from "../../../core/util/directTrailerSource.js";
 import { Router } from "../../navigation/routerState.js";
 
 import { ScreenUtils } from "../../navigation/screen.js";
@@ -189,6 +190,10 @@ export function buildInlineYoutubePlayerUrl(ytId = "", { muted = false, loop = f
 }
 
 export function resolveTrailerSource(meta = {}) {
+  const directSource = findDirectTrailerSource(meta);
+  if (directSource) {
+    return directSource;
+  }
   const trailerCandidates = [...(Array.isArray(meta?.trailers) ? meta.trailers : []), ...(Array.isArray(meta?.videos) ? meta.videos : [])];
   for (const entry of trailerCandidates) {
     const ytId = resolveYoutubeId(entry?.ytId || entry?.youtubeId || entry?.source || entry?.url || entry?.link || "");
@@ -221,6 +226,10 @@ export function resolveTrailerSource(meta = {}) {
 
 export async function resolveTmdbTrailerSource(meta = {}, itemType = "movie") {
   const fallbackSource = resolveTrailerSource(meta);
+  // TMDB only lists YouTube videos; an addon's own video file wins over it.
+  if (fallbackSource?.kind === "video") {
+    return fallbackSource;
+  }
   const settings = TmdbSettingsStore.get();
   if (!settings.enabled || !settings.useTrailers || !TMDB_API_KEY || !meta?.id) {
     return fallbackSource;
