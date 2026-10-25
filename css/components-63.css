@@ -69,7 +69,11 @@
 /* YouTube draws its title bar, logo and "More videos" shelf at the iframe
    edges. Make the frame twice as tall as the layer and centre it: the video
    is letterboxed to the layer's width, so it still fills the layer while the
-   YouTube chrome falls outside the clipped area. */
+   YouTube chrome falls outside the clipped area.
+   YouTube picks its stream from the player's CSS size, and the app is laid
+   out at 1920x1080 on a 4K panel. Lay the frame out at twice that size and
+   scale it back down, so a full-screen trailer requests 2160p and a card
+   trailer requests the quality its real pixel size needs. */
 .home-screen-shell .home-poster-trailer-layer {
   overflow: hidden;
 }
@@ -84,7 +88,9 @@
   right: auto;
   bottom: auto;
   top: -50%;
-  width: 100%;
-  height: 200%;
+  width: 200%;
+  height: 400%;
+  transform: scale(0.5);
+  transform-origin: 0 0;
   pointer-events: none;
 }
