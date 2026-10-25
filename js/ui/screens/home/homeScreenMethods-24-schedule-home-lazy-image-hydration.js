@@ -209,7 +209,7 @@ export function createHomeScreenMethods24() {
       const horizontalMargin = useBoundedTvHydration ? 320 : constrained ? 520 : 1000;
       // Poster copies are cheap to keep ready; prepare them further out than
       // the mount window so scrolling reveals finished posters.
-      const prefetchVerticalMargin = Platform.isTizen() ? verticalMargin * 2.5 : verticalMargin;
+      const prefetchVerticalMargin = Platform.isTizen() ? verticalMargin * 5 : verticalMargin;
       const prefetchHorizontalMargin = Platform.isTizen() ? horizontalMargin * 4 : horizontalMargin;
       const focusedRow = Boolean(anchorRow && anchorRow === anchorNode?.closest?.(HOME_LAZY_IMAGE_ROW_SELECTOR));
       const focusedRowMargin = focusedRow ? Math.max(96, Math.round(Number(anchorNode?.offsetWidth || 0) * 0.65)) : horizontalMargin;

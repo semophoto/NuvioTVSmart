@@ -341,7 +341,9 @@ export function buildYoutubeEmbedUrl(videoId, { muted = true } = {}) {
       proxyUrl.searchParams.set("autoplay", "1");
       proxyUrl.searchParams.set("muted", muted ? "1" : "0");
       proxyUrl.searchParams.set("controls", "0");
-      proxyUrl.searchParams.set("loop", "1");
+      // The hosted proxy turns loop=1 into a one-video playlist, which makes
+      // YouTube draw previous/next buttons over the trailer.
+      proxyUrl.searchParams.set("loop", "0");
       proxyUrl.searchParams.set("playsinline", "1");
       proxyUrl.searchParams.set("rel", "0");
       proxyUrl.searchParams.set("cc_load_policy", "0");

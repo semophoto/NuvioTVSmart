@@ -1,5 +1,9 @@
 import * as internals from "./homeScreenContext.js";
 
+// YouTube overlays its play/pause button and title bar for the first 3-4 s of
+// playback, then hides them. Keep the artwork up until they are gone.
+const YOUTUBE_CHROME_SETTLE_MS = 4000;
+
 export function createHomeScreenMethods13() {
   const { metaRepository, isCollectionFolderItem, resolveTrailerSource, withTimeout, resolveTrailerMetaWithTmdbFallback } = internals;
 
@@ -52,9 +56,15 @@ export function createHomeScreenMethods13() {
           if (data.type === "ended" || data.type === "error") {
             frame.dataset.ambientTrailerPlaying = "false";
           }
+          if (data.type === "ended") {
+            // Trailers play once (looping needs a YouTube playlist, which adds
+            // previous/next buttons); hand the card back to its artwork.
+            container.classList.remove("is-active");
+            return;
+          }
           if (data.type === "firstFrame") {
             frame.dataset.ambientTrailerPlaying = "true";
-            reveal(150);
+            reveal(YOUTUBE_CHROME_SETTLE_MS);
             return;
           }
           const state = data.type === "state" && data.state && typeof data.state === "object" ? data.state : null;
@@ -62,9 +72,9 @@ export function createHomeScreenMethods13() {
             frame.dataset.ambientTrailerPlaying = String(state.paused === false && state.loading === false);
           }
           if (state && Number(state.currentTime || 0) > 0 && state.paused === false) {
-            reveal(150);
+            reveal(YOUTUBE_CHROME_SETTLE_MS);
           } else if (state && state.controllable === false && state.loading === false) {
-            reveal(1200);
+            reveal(YOUTUBE_CHROME_SETTLE_MS);
           }
         };
         const cleanup = () => {
