@@ -6,7 +6,7 @@
 const POSTER_TARGET_WIDTH = 660;
 const LANDSCAPE_TARGET_WIDTH = 1000;
 const MAX_CACHED = 600;
-const MAX_IN_FLIGHT = 4;
+const MAX_IN_FLIGHT = 6;
 // Card-sized posters are small files and not worth a re-encode. Checking the
 // byte size avoids decoding twice just to read the width.
 const MIN_DOWNSCALE_BYTES = 300 * 1024;
@@ -141,8 +141,93 @@ function downscaleInWorker(src, targetWidth) {
   });
 }
 
-async function downscale(src, targetWidth) {
+// Copies are kept in IndexedDB so a relaunch paints Home posters from disk
+// instead of downloading and shrinking every 3 MB original again. Rating
+// posters change over time, so entries expire after a few days.
+const DB_NAME = "nuvio-home-posters";
+const DB_STORE = "posters";
+const PERSIST_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+const MAX_PERSISTED = 1500;
+let dbPromise = null;
+
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve) => {
+    try {
+      if (typeof indexedDB === "undefined") return resolve(null);
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const store = request.result.createObjectStore(DB_STORE, { keyPath: "key" });
+        store.createIndex("at", "at");
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        resolve(db);
+        prunePersisted(db);
+      };
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch (_) {
+      resolve(null);
+    }
+  });
+  return dbPromise;
+}
+
+function prunePersisted(db) {
+  try {
+    const store = db.transaction(DB_STORE, "readwrite").objectStore(DB_STORE);
+    const countRequest = store.count();
+    countRequest.onsuccess = () => {
+      let excess = countRequest.result - MAX_PERSISTED;
+      if (excess <= 0) return;
+      store.index("at").openCursor().onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor || excess <= 0) return;
+        cursor.delete();
+        excess -= 1;
+        cursor.continue();
+      };
+    };
+  } catch (_) {
+    // Pruning is best effort.
+  }
+}
+
+async function readPersisted(key) {
+  const db = await openDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const request = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(key);
+      request.onsuccess = () => {
+        const entry = request.result;
+        resolve(entry && Date.now() - Number(entry.at || 0) < PERSIST_TTL_MS ? entry : null);
+      };
+      request.onerror = () => resolve(null);
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function writePersisted(key, blob) {
+  void openDb().then((db) => {
+    if (!db) return;
+    try {
+      // blob null marks a poster that is already small enough to use as-is.
+      db.transaction(DB_STORE, "readwrite")
+        .objectStore(DB_STORE)
+        .put({ key, blob, at: Date.now() });
+    } catch (_) {
+      // Quota or a closed database: the in-memory copy still works.
+    }
+  });
+}
+
+async function downscale(src, targetWidth, key) {
   const blob = await downscaleInWorker(src, targetWidth);
+  writePersisted(key, blob);
   return blob ? URL.createObjectURL(blob) : src;
 }
 
@@ -150,7 +235,7 @@ function pump() {
   while (active < MAX_IN_FLIGHT && queue.length) {
     const job = queue.shift();
     active += 1;
-    downscale(job.src, job.targetWidth)
+    downscale(job.src, job.targetWidth, job.key)
       // Hosts without CORS, or decode errors: keep the original image.
       .catch(() => job.src)
       .then((url) => {
@@ -183,6 +268,7 @@ export function resolveHomePoster(src, targetWidth, { urgent = false } = {}) {
   if (!isSupported() || !/^https?:/i.test(src)) return Promise.resolve(src);
   const pending = inFlight.get(key);
   if (pending) {
+    if (urgent) pending.urgent = true;
     if (urgent && queue.includes(pending)) {
       queue.splice(queue.indexOf(pending), 1);
       queue.unshift(pending);
@@ -193,10 +279,20 @@ export function resolveHomePoster(src, targetWidth, { urgent = false } = {}) {
   const promise = new Promise((done) => {
     resolve = done;
   });
-  const job = { key, src, targetWidth, resolve, promise };
+  const job = { key, src, targetWidth, resolve, promise, urgent };
   inFlight.set(key, job);
-  if (urgent) queue.unshift(job);
-  else queue.push(job);
-  pump();
+  // The disk lookup does not take a download slot; only misses are queued.
+  void readPersisted(key).then((entry) => {
+    if (entry) {
+      const url = entry.blob ? URL.createObjectURL(entry.blob) : src;
+      remember(key, url);
+      inFlight.delete(key);
+      resolve(url);
+      return;
+    }
+    if (job.urgent) queue.unshift(job);
+    else queue.push(job);
+    pump();
+  });
   return promise;
 }

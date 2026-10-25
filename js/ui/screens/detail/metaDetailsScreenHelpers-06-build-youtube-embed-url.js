@@ -109,7 +109,6 @@ export function buildYoutubeEmbedUrl(ytId = "", { muted = false } = {}) {
       proxyUrl.searchParams.set("muted", muted ? "1" : "0");
       proxyUrl.searchParams.set("controls", "0");
       proxyUrl.searchParams.set("loop", "1");
-      proxyUrl.searchParams.set("playlist", cleanId);
       proxyUrl.searchParams.set("playsinline", "1");
       proxyUrl.searchParams.set("rel", "0");
       proxyUrl.searchParams.set("cc_load_policy", "0");
@@ -126,8 +125,9 @@ export function buildYoutubeEmbedUrl(ytId = "", { muted = false } = {}) {
     autoplay: "1",
     mute: muted ? "1" : "0",
     controls: "0",
-    loop: "1",
-    playlist: cleanId,
+    // A one-video playlist (needed for loop) makes YouTube show
+    // previous/next buttons over the trailer.
+    loop: "0",
     playsinline: "1",
     rel: "0",
     modestbranding: "1",
@@ -158,11 +158,6 @@ export function buildInlineYoutubePlayerUrl(ytId = "", { muted = false, loop = f
       proxyUrl.searchParams.set("muted", muted ? "1" : "0");
       proxyUrl.searchParams.set("controls", "0");
       proxyUrl.searchParams.set("loop", loop ? "1" : "0");
-      if (loop) {
-        proxyUrl.searchParams.set("playlist", cleanId);
-      } else {
-        proxyUrl.searchParams.delete("playlist");
-      }
       proxyUrl.searchParams.set("playsinline", "1");
       proxyUrl.searchParams.set("rel", "0");
       proxyUrl.searchParams.set("cc_load_policy", "0");
@@ -183,9 +178,6 @@ export function buildInlineYoutubePlayerUrl(ytId = "", { muted = false, loop = f
     modestbranding: "1",
     enablejsapi: "1"
   });
-  if (loop) {
-    params.set("playlist", cleanId);
-  }
   const origin = String(globalThis?.location?.origin || "").trim();
   if (/^https?:\/\//i.test(origin)) {
     params.set("origin", origin);

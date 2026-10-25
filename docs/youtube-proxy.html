@@ -289,8 +289,9 @@
             "autoplay=" + (autoplay ? "1" : "0"),
             "mute=" + (startMuted ? "1" : "0"),
             "controls=0",
-            "loop=" + (loop ? "1" : "0"),
-            "playlist=" + encodeURIComponent(videoId),
+            // No playlist: a one-video playlist makes YouTube draw
+            // previous/next buttons over the trailer. Looping needs it, so the
+            // direct fallback plays once.
             "playsinline=1",
             "rel=0",
             "modestbranding=1",
@@ -345,12 +346,12 @@
               disablekb: 1,
               enablejsapi: 1,
               fs: 0,
-              loop: loop ? 1 : 0,
+              // Looping is done in onStateChange; YouTube's own loop needs a
+              // playlist, which adds previous/next buttons over the video.
               modestbranding: 1,
               cc_load_policy: captionsEnabled ? 1 : 0,
               origin: pageOriginIsHttp ? pageOrigin : undefined,
               playsinline: 1,
-              playlist: loop ? videoId : undefined,
               rel: 0,
               widget_referrer: widgetReferrer
             },

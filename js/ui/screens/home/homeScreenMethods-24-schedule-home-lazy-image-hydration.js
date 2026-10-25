@@ -19,6 +19,12 @@ export function createHomeScreenMethods24() {
   } = internals;
 
   return {
+    prefetchHomeLazyImage(image, src) {
+      const targetWidth = Platform.isTizen() ? getHomePosterTargetWidth(image) : 0;
+      if (targetWidth && !getCachedHomePoster(src, targetWidth)) {
+        void resolveHomePoster(src, targetWidth);
+      }
+    },
     assignHomeLazyImageSource(image, src, { urgent = false } = {}) {
       image.loading = "eager";
       image.removeAttribute("data-src");
@@ -201,6 +207,10 @@ export function createHomeScreenMethods24() {
       // move into a burst of eager image requests.
       const verticalMargin = useBoundedTvHydration ? 480 : constrained ? 720 : 1200;
       const horizontalMargin = useBoundedTvHydration ? 320 : constrained ? 520 : 1000;
+      // Poster copies are cheap to keep ready; prepare them further out than
+      // the mount window so scrolling reveals finished posters.
+      const prefetchVerticalMargin = Platform.isTizen() ? verticalMargin * 2.5 : verticalMargin;
+      const prefetchHorizontalMargin = Platform.isTizen() ? horizontalMargin * 4 : horizontalMargin;
       const focusedRow = Boolean(anchorRow && anchorRow === anchorNode?.closest?.(HOME_LAZY_IMAGE_ROW_SELECTOR));
       const focusedRowMargin = focusedRow ? Math.max(96, Math.round(Number(anchorNode?.offsetWidth || 0) * 0.65)) : horizontalMargin;
       const pendingLoads = [];
@@ -227,7 +237,7 @@ export function createHomeScreenMethods24() {
         if (!shouldHydrateFocusedRowImmediately && row instanceof HTMLElement) {
           const rowRect = row.getBoundingClientRect();
           const isRowNearViewport =
-            rowRect.bottom >= viewportRect.top - verticalMargin && rowRect.top <= viewportRect.bottom + verticalMargin;
+            rowRect.bottom >= viewportRect.top - prefetchVerticalMargin && rowRect.top <= viewportRect.bottom + prefetchVerticalMargin;
           if (!isRowNearViewport) {
             return;
           }
@@ -250,6 +260,16 @@ export function createHomeScreenMethods24() {
               rect.right >= viewportRect.left - imageHorizontalMargin &&
               rect.left <= viewportRect.right + imageHorizontalMargin;
             if (!isNearViewport) {
+              // Just beyond the visible window: prepare the card-sized copy so
+              // the poster is ready when it scrolls in, without mounting it.
+              const isNearPrefetchWindow =
+                rect.bottom >= viewportRect.top - prefetchVerticalMargin &&
+                rect.top <= viewportRect.bottom + prefetchVerticalMargin &&
+                rect.right >= viewportRect.left - prefetchHorizontalMargin &&
+                rect.left <= viewportRect.right + prefetchHorizontalMargin;
+              if (isNearPrefetchWindow) {
+                this.prefetchHomeLazyImage(image, src);
+              }
               return;
             }
           }
