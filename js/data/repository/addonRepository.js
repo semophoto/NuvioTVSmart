@@ -204,6 +204,10 @@ class AddonRepository {
       return "1";
     }
 
+    const memoKey = `${LocalStore.revision(PROFILES_KEY)}|${raw}`;
+    if (this.storageProfileIdMemo?.memoKey === memoKey) {
+      return this.storageProfileIdMemo.value;
+    }
     const storedProfiles = LocalStore.get(PROFILES_KEY, null);
     const activeProfile = Array.isArray(storedProfiles)
       ? storedProfiles.find((profile) => {
@@ -214,7 +218,9 @@ class AddonRepository {
     const usesPrimaryAddons = readBooleanFlag(
       activeProfile?.usesPrimaryAddons ?? activeProfile?.uses_primary_addons
     );
-    return usesPrimaryAddons ? "1" : raw;
+    const value = usesPrimaryAddons ? "1" : raw;
+    this.storageProfileIdMemo = { memoKey, value };
+    return value;
   }
 
   canEdit(profileId = null) {
@@ -323,11 +329,33 @@ class AddonRepository {
     return envelope.profiles[normalizedProfileId];
   }
 
+  copyScopedValue(value) {
+    // Scoped values are string lists or flat string-keyed maps.
+    if (Array.isArray(value)) return [...value];
+    if (value && typeof value === "object") return { ...value };
+    return value;
+  }
+
   readProfileScopedValue(key, normalizeValue, defaultValue, profileId = null) {
+    // isAddonEnabled() and friends run per addon on every Home load; re-parsing
+    // and re-normalizing localStorage each time is O(addons^2) on the TV CPU.
+    // LocalStore revisions change on every write, so the memo cannot go stale.
+    const storageProfileId = this.getActiveStorageProfileId(profileId);
+    const memoKey = `${LocalStore.revision(key)}|${storageProfileId}`;
+    const memo = this.scopedValueMemo?.get(key);
+    if (memo && memo.memoKey === memoKey) {
+      return this.copyScopedValue(memo.value);
+    }
     const envelope = this.readProfileScopedEnvelope(key, normalizeValue);
-    return this.cloneValue(
+    const value = this.cloneValue(
       this.ensureProfileScopedValue(key, envelope, normalizeValue, defaultValue, profileId)
     );
+    if (!this.scopedValueMemo) this.scopedValueMemo = new Map();
+    this.scopedValueMemo.set(key, {
+      memoKey: `${LocalStore.revision(key)}|${storageProfileId}`,
+      value
+    });
+    return this.copyScopedValue(value);
   }
 
   writeProfileScopedValue(key, normalizeValue, value, profileId = null) {

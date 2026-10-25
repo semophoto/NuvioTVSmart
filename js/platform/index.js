@@ -94,7 +94,7 @@ export const Platform = {
 
   init() {
     const adapter = getAdapter();
-    adapter.init?.();
+    adapter.init?.({ forceExitApp: () => this.forceExitApp() });
     return adapter;
   },
 
@@ -121,7 +121,17 @@ export const Platform = {
     return this.getName() === "browser";
   },
 
+  // A regular exit request (Back on a root screen). Platforms that can keep
+  // the app resident move it to the background instead of closing it.
   exitApp() {
+    const adapter = getAdapter();
+    if (typeof adapter.backgroundApp === "function" && adapter.backgroundApp()) {
+      return true;
+    }
+    return this.forceExitApp();
+  },
+
+  forceExitApp() {
     if (globalThis.document && typeof globalThis.CustomEvent === "function") {
       const beforeExitEvent = new CustomEvent("nuvio:beforeExitApp", {
         cancelable: true

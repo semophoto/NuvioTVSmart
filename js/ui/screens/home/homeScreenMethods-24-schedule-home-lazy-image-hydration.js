@@ -1,4 +1,5 @@
 import * as internals from "./homeScreenContext.js";
+import { getCachedHomePoster, getHomePosterTargetWidth, resolveHomePoster } from "./homePosterDownscale.js";
 
 export function createHomeScreenMethods24() {
   const {
@@ -13,10 +14,37 @@ export function createHomeScreenMethods24() {
     isCompletedForContinueWatching,
     episodeKey,
     episodeSortKey,
-    buildNextUpSeedFromWatchedItem
+    buildNextUpSeedFromWatchedItem,
+    Platform
   } = internals;
 
   return {
+    prefetchHomeLazyImage(image, src) {
+      const targetWidth = Platform.isTizen() ? getHomePosterTargetWidth(image) : 0;
+      if (targetWidth && !getCachedHomePoster(src, targetWidth)) {
+        void resolveHomePoster(src, targetWidth);
+      }
+    },
+    assignHomeLazyImageSource(image, src, { urgent = false } = {}) {
+      image.loading = "eager";
+      image.removeAttribute("data-src");
+      const targetWidth = Platform.isTizen() ? getHomePosterTargetWidth(image) : 0;
+      if (!targetWidth) {
+        image.src = src;
+        return;
+      }
+      const cached = getCachedHomePoster(src, targetWidth);
+      if (cached) {
+        image.src = cached;
+        return;
+      }
+      void resolveHomePoster(src, targetWidth, { urgent }).then((resolvedSrc) => {
+        // A re-render that changed this card queues a new data-src; that pass owns it.
+        if (image.isConnected && !image.getAttribute("data-src") && !image.getAttribute("src")) {
+          image.src = resolvedSrc;
+        }
+      });
+    },
     shouldUseBoundedHomeImageHydration() {
       // Keep image prefetch bounded on TV independently of the animated scroll policy.
       return Boolean(this.isPerformanceConstrained() || getTvRuntimePerformanceProfile().isTvRuntime);
@@ -179,6 +207,10 @@ export function createHomeScreenMethods24() {
       // move into a burst of eager image requests.
       const verticalMargin = useBoundedTvHydration ? 480 : constrained ? 720 : 1200;
       const horizontalMargin = useBoundedTvHydration ? 320 : constrained ? 520 : 1000;
+      // Poster copies are cheap to keep ready; prepare them further out than
+      // the mount window so scrolling reveals finished posters.
+      const prefetchVerticalMargin = Platform.isTizen() ? verticalMargin * 5 : verticalMargin;
+      const prefetchHorizontalMargin = Platform.isTizen() ? horizontalMargin * 4 : horizontalMargin;
       const focusedRow = Boolean(anchorRow && anchorRow === anchorNode?.closest?.(HOME_LAZY_IMAGE_ROW_SELECTOR));
       const focusedRowMargin = focusedRow ? Math.max(96, Math.round(Number(anchorNode?.offsetWidth || 0) * 0.65)) : horizontalMargin;
       const pendingLoads = [];
@@ -205,7 +237,7 @@ export function createHomeScreenMethods24() {
         if (!shouldHydrateFocusedRowImmediately && row instanceof HTMLElement) {
           const rowRect = row.getBoundingClientRect();
           const isRowNearViewport =
-            rowRect.bottom >= viewportRect.top - verticalMargin && rowRect.top <= viewportRect.bottom + verticalMargin;
+            rowRect.bottom >= viewportRect.top - prefetchVerticalMargin && rowRect.top <= viewportRect.bottom + prefetchVerticalMargin;
           if (!isRowNearViewport) {
             return;
           }
@@ -228,6 +260,16 @@ export function createHomeScreenMethods24() {
               rect.right >= viewportRect.left - imageHorizontalMargin &&
               rect.left <= viewportRect.right + imageHorizontalMargin;
             if (!isNearViewport) {
+              // Just beyond the visible window: prepare the card-sized copy so
+              // the poster is ready when it scrolls in, without mounting it.
+              const isNearPrefetchWindow =
+                rect.bottom >= viewportRect.top - prefetchVerticalMargin &&
+                rect.top <= viewportRect.bottom + prefetchVerticalMargin &&
+                rect.right >= viewportRect.left - prefetchHorizontalMargin &&
+                rect.left <= viewportRect.right + prefetchHorizontalMargin;
+              if (isNearPrefetchWindow) {
+                this.prefetchHomeLazyImage(image, src);
+              }
               return;
             }
           }
@@ -251,10 +293,8 @@ export function createHomeScreenMethods24() {
       if (this.isLegacyTvRuntime()) {
         this.commitHomeLazyImageSources(pendingLoads, anchorNode, anchorRow);
       } else {
-        pendingLoads.forEach(({ image, src }) => {
-          image.loading = "eager";
-          image.removeAttribute("data-src");
-          image.src = src;
+        pendingLoads.forEach(({ image, src, isFocusedRow }) => {
+          this.assignHomeLazyImageSource(image, src, { urgent: isFocusedRow });
         });
       }
     },
@@ -296,7 +336,7 @@ export function createHomeScreenMethods24() {
         this.homeLazyImageCommitRaf = 0;
         let assigned = 0;
         while (pending.length && assigned < HOME_LEGACY_LAZY_HYDRATION_MAX_PER_FRAME) {
-          const { image, src } = pending.shift();
+          const { image, src, isFocusedRow } = pending.shift();
           if (!(image instanceof HTMLImageElement) || !image.isConnected) {
             continue;
           }
@@ -304,9 +344,7 @@ export function createHomeScreenMethods24() {
           if (!currentSrc) {
             continue;
           }
-          image.loading = "eager";
-          image.removeAttribute("data-src");
-          image.src = currentSrc || src;
+          this.assignHomeLazyImageSource(image, currentSrc || src, { urgent: isFocusedRow });
           assigned += 1;
         }
         if (pending.length) {

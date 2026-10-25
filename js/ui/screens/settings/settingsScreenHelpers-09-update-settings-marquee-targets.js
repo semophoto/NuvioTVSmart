@@ -189,6 +189,14 @@ export function scrollSettingsRailItem(node, options = {}) {
     return;
   }
 
+  // The Top Bar settings style lays the rail out as a horizontal row. Keep
+  // the selected tab on screen; otherwise tabs past the right edge are
+  // selected while invisible.
+  if (rail.closest?.(".settings-shell[data-settings-style='horizon']")) {
+    scrollSettingsRailItemHorizontally(rail, node);
+    return;
+  }
+
   const clientHeight = rail.clientHeight || 0;
   const maxScroll = Math.max(0, rail.scrollHeight - clientHeight);
   if (!clientHeight || maxScroll <= 0) {
@@ -214,6 +222,24 @@ export function scrollSettingsRailItem(node, options = {}) {
     return;
   }
   animateSettingsRailScroll(rail, nextScrollTop);
+}
+
+function scrollSettingsRailItemHorizontally(rail, node) {
+  const clientWidth = rail.clientWidth || 0;
+  const maxScroll = Math.max(0, rail.scrollWidth - clientWidth);
+  if (!clientWidth || maxScroll <= 0) {
+    return;
+  }
+  const railRect = rail.getBoundingClientRect();
+  const itemRect = node.getBoundingClientRect();
+  const itemLeft = itemRect.left - railRect.left + rail.scrollLeft;
+  const itemWidth = itemRect.width || node.offsetWidth || 0;
+  // Center the tab so its neighbours stay visible on both sides. Set it
+  // directly: a per-frame scroll animation is visible jank on TV hardware.
+  const nextScrollLeft = clamp(itemLeft + itemWidth / 2 - clientWidth / 2, 0, maxScroll);
+  if (Math.abs(rail.scrollLeft - nextScrollLeft) >= 1) {
+    rail.scrollLeft = nextScrollLeft;
+  }
 }
 
 export function animateSettingsRailScroll(rail, nextScrollTop) {

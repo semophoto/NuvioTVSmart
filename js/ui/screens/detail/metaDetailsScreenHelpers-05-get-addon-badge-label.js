@@ -288,7 +288,7 @@ export function resolveTrailerTrustedProxyOrigin() {
   return "";
 }
 
-export function buildDirectYoutubeEmbedUrl(cleanId = "", { muted = false, loop = true } = {}) {
+export function buildDirectYoutubeEmbedUrl(cleanId = "", { muted = false, loop: _loop = true } = {}) {
   const videoId = String(cleanId || "").trim();
   if (!videoId || !Environment.isBrowser()) {
     return "";
@@ -297,7 +297,9 @@ export function buildDirectYoutubeEmbedUrl(cleanId = "", { muted = false, loop =
     autoplay: "1",
     mute: muted ? "1" : "0",
     controls: "0",
-    loop: loop ? "1" : "0",
+    // YouTube only loops with a playlist, and a one-video playlist adds
+    // previous/next buttons over the trailer, so direct embeds play once.
+    loop: "0",
     playsinline: "1",
     rel: "0",
     modestbranding: "1",
@@ -305,9 +307,6 @@ export function buildDirectYoutubeEmbedUrl(cleanId = "", { muted = false, loop =
     cc_load_policy: "0",
     iv_load_policy: "3"
   });
-  if (loop) {
-    params.set("playlist", videoId);
-  }
   const origin = String(globalThis?.location?.origin || "").trim();
   if (/^https?:\/\//i.test(origin)) {
     params.set("origin", origin);

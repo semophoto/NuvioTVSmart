@@ -341,8 +341,9 @@ export function buildYoutubeEmbedUrl(videoId, { muted = true } = {}) {
       proxyUrl.searchParams.set("autoplay", "1");
       proxyUrl.searchParams.set("muted", muted ? "1" : "0");
       proxyUrl.searchParams.set("controls", "0");
-      proxyUrl.searchParams.set("loop", "1");
-      proxyUrl.searchParams.set("playlist", cleanId);
+      // The hosted proxy turns loop=1 into a one-video playlist, which makes
+      // YouTube draw previous/next buttons over the trailer.
+      proxyUrl.searchParams.set("loop", "0");
       proxyUrl.searchParams.set("playsinline", "1");
       proxyUrl.searchParams.set("rel", "0");
       proxyUrl.searchParams.set("cc_load_policy", "0");
@@ -359,8 +360,9 @@ export function buildYoutubeEmbedUrl(videoId, { muted = true } = {}) {
     autoplay: "1",
     mute: muted ? "1" : "0",
     controls: "0",
-    loop: "1",
-    playlist: cleanId,
+    // A one-video playlist (needed for loop) makes YouTube show
+    // previous/next buttons over the trailer.
+    loop: "0",
     playsinline: "1",
     rel: "0",
     modestbranding: "1",
