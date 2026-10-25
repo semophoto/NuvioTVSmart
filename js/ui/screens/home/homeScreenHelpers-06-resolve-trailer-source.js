@@ -1,4 +1,5 @@
 /* eslint-disable no-unused-vars */
+import { findDirectTrailerSource } from "../../../core/util/directTrailerSource.js";
 import { Router } from "../../navigation/routerState.js";
 
 import { ScreenUtils } from "../../navigation/screen.js";
@@ -191,6 +192,10 @@ import { resolveYoutubeId, buildYoutubeEmbedUrl } from "./homeScreenHelpers-05-n
 import { parseRuntimeMinutes } from "./homeScreenHelpers-04-animate-hero-logo-swap.js";
 
 export function resolveTrailerSource(meta = {}) {
+  const directSource = findDirectTrailerSource(meta);
+  if (directSource) {
+    return directSource;
+  }
   const trailerCandidates = [...(Array.isArray(meta?.trailers) ? meta.trailers : []), ...(Array.isArray(meta?.videos) ? meta.videos : [])];
   for (const entry of trailerCandidates) {
     const ytId = resolveYoutubeId(entry?.ytId || entry?.youtubeId || entry?.source || entry?.url || entry?.link || "");
@@ -286,6 +291,10 @@ export async function fetchModernHeroTmdbEnrichment(hero = {}, itemType = "movie
 
 export async function resolveTrailerMetaWithTmdbFallback(meta = {}, itemType = "movie") {
   const fallbackSource = resolveTrailerSource(meta);
+  // TMDB only lists YouTube videos; an addon's own video file wins over it.
+  if (fallbackSource?.kind === "video") {
+    return fallbackSource;
+  }
   const settings = TmdbSettingsStore.get();
   if (!settings.enabled || !settings.useTrailers || !TMDB_API_KEY) {
     return fallbackSource;
