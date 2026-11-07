@@ -18,6 +18,7 @@ own commit so a new upstream release can be picked up by replaying them.
 | Drop YouTube prev/next from trailer embeds / Stop the hosted proxy adding a playlist | Trailers play once without YouTube's playlist buttons.                                                                                                                                     |
 | Let YouTube trailers request quality for their real pixel size                       | Full-screen trailers request 4K.                                                                                                                                                           |
 | Prefer addon video-file trailers over YouTube                                        | Direct video trailers play in Nuvio's player, YouTube is the fallback.                                                                                                                     |
+| Keep the sign-in screen alive when Back hides the app                                | Back on the first-run sign-in screen no longer blanks it and stops its QR polling.                                                                                                         |
 
 Fork-only files (`FORK.md`, `scripts/fork/`, `css/fork-tizen.css`,
 `js/ui/images/tizenPosterTuning.js`) are kept out of upstream's numbered files
