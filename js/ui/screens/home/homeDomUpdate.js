@@ -127,10 +127,14 @@ function releasePoster(image) {
   delete image.dataset.originalSrc;
 }
 
+// Fork: any rescaled Home image (posters, and Continue Watching backdrops on
+// Tizen) carries data-original-src, so release by that, not by class.
+const RESCALED_IMAGE_SELECTOR = "img[data-original-src]";
+
 function releasePosters(node) {
   if (node.nodeType !== 1) return;
-  if (node.matches("img.content-poster")) releasePoster(node);
-  node.querySelectorAll("img.content-poster").forEach(releasePoster);
+  if (node.matches(RESCALED_IMAGE_SELECTOR)) releasePoster(node);
+  node.querySelectorAll(RESCALED_IMAGE_SELECTOR).forEach(releasePoster);
 }
 
 function updateNode(node, source, protectedNode) {

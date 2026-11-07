@@ -143,15 +143,17 @@ export function createAuthQrSignInScreenMethods03() {
     },
     leaveAuthScreen() {
       if (this.isLeaving) return;
-      this.isLeaving = true;
-      this.updateActionButtons();
-      this.cleanup();
       if (this.onboardingMode) {
         // Android finishes the onboarding activity on hardware Back. Do not
         // silently turn Back into the explicit guest opt-in action.
+        // Fork: on Tizen this only hides the app, so the screen must stay
+        // mounted (and its QR polling alive) for when it is reopened.
         Platform.exitApp();
         return;
       }
+      this.isLeaving = true;
+      this.updateActionButtons();
+      this.cleanup();
       Router.back({ skipConsume: true });
     },
     getLeftDescription() {

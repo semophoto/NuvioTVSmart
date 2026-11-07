@@ -4,6 +4,12 @@ import { selectCatalogEntries } from "../../core/util/catalogEntryMapper.js";
 import { CatalogApi } from "../remote/api/catalogApi.js";
 import { addonRepository } from "./addonRepository.js";
 
+// Fork: cached catalog pages expire, so Home's stale-catalog refresh (and a
+// long-running Tizen session that never restarts) actually fetches new items.
+// Matches upstream's HOME_CATALOG_REFRESH_TTL_MS. A failed refetch falls back
+// to the stale page rather than emptying the row.
+const CATALOG_CACHE_TTL_MS = 15 * 60 * 1000;
+
 class CatalogRepository {
   constructor() {
     this.catalogCache = new Map();
@@ -44,8 +50,9 @@ class CatalogRepository {
       supportsSkip
     });
 
-    const cached = this.catalogCache.get(cacheKey);
-    if (cached) {
+    const cachedEntry = this.catalogCache.get(cacheKey);
+    const cached = cachedEntry?.row || null;
+    if (cached && Date.now() - cachedEntry.at < CATALOG_CACHE_TTL_MS) {
       return {
         status: "success",
         data: cached
@@ -61,7 +68,7 @@ class CatalogRepository {
     });
 
     const cacheGeneration = this.cacheGeneration;
-    return safeApiCall(() =>
+    const request = safeApiCall(() =>
       CatalogApi.getCatalog(url, signal ? { signal } : {}).then((dto) => {
         const { metas, rawItemCount } = selectCatalogEntries(dto?.metas);
         const items = metas.map((meta) => ({
@@ -93,10 +100,18 @@ class CatalogRepository {
         // it out of the response cache so the next Home request retries it,
         // matching Android, which has no catalog-response cache.
         if (cacheGeneration === this.cacheGeneration && items.length) {
-          this.catalogCache.set(cacheKey, row);
+          this.catalogCache.set(cacheKey, { row, at: Date.now() });
         }
         return row;
       })
+    );
+    if (!cached) {
+      return request;
+    }
+    return request.then((result) =>
+      result?.status === "success" && result.data?.items?.length
+        ? result
+        : { status: "success", data: cached }
     );
   }
 
