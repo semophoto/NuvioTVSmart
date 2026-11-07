@@ -123,6 +123,12 @@ export function readPersistedArtwork(key) {
   );
 }
 
+// The app stays resident on Tizen (Back only hides it), so pruning only when
+// the database opens could let the store grow for days. Prune again every so
+// many writes as well.
+const PRUNE_EVERY_WRITES = 150;
+let writesSincePrune = 0;
+
 /** Store a worker result. Transient failures (network, timeout) are not kept. */
 export function writePersistedArtwork(key, blob, reason = "") {
   if (!isTizenArtworkTuningActive()) return;
@@ -133,6 +139,11 @@ export function writePersistedArtwork(key, blob, reason = "") {
       db.transaction(DB_STORE, "readwrite")
         .objectStore(DB_STORE)
         .put({ key, blob: blob || null, at: Date.now() });
+      writesSincePrune += 1;
+      if (writesSincePrune >= PRUNE_EVERY_WRITES) {
+        writesSincePrune = 0;
+        prune(db);
+      }
     } catch (_) {
       // Quota or a closed database: the in-memory copy still works.
     }

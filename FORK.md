@@ -20,6 +20,7 @@ own commit so a new upstream release can be picked up by replaying them.
 | Prefer addon video-file trailers over YouTube                                        | Direct video trailers play in Nuvio's player, YouTube is the fallback.                                                                                                                     |
 | Keep the sign-in screen alive when Back hides the app                                | Back on the first-run sign-in screen no longer blanks it and stops its QR polling.                                                                                                         |
 | Release rescaled Continue Watching backdrops                                         | Rescaled CW backdrops are handed back when their cards are removed, so they no longer pile up in memory.                                                                                   |
+| Prune the Tizen poster disk cache while the app stays resident                       | The 1500-entry cap is enforced every 150 writes, not only at launch.                                                                                                                       |
 
 Fork-only files (`FORK.md`, `scripts/fork/`, `css/fork-tizen.css`,
 `js/ui/images/tizenPosterTuning.js`) are kept out of upstream's numbered files
