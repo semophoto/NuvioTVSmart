@@ -24,6 +24,8 @@ import { renderAddonRemotePage } from "./bootstrap/renderAddonRemotePage.js";
 import { preloadStreamBadgeImages } from "./ui/screens/stream/streamScreen.js";
 import { warmStreamingLibs } from "./runtime/loadStreamingLibs.js";
 import { Platform } from "./platform/index.js";
+// Fork: refresh Home when the hidden app is reopened.
+import { installTizenResumeRefresh } from "./fork/tizenResumeRefresh.js";
 import { TizenCapabilities } from "./platform/tizen/tizenCapabilities.js";
 import { PluginServiceClient } from "./platform/pluginServiceClient.js";
 import { getTvRuntimePerformanceProfile } from "./platform/tvRuntimePerformance.js";
@@ -640,6 +642,7 @@ async function bootstrapApp() {
   FocusEngine.init();
   setupProviderCredentialForegroundLifecycle();
   setupTizenPlaybackLifecycle();
+  installTizenResumeRefresh({ Platform, Router });
   setupTizenAppControlLifecycle();
   setupPluginRuntimeLifecycle();
   setupWebOsAppLifecycle();
