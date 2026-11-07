@@ -157,7 +157,7 @@ export function createHomeScreenMethods26() {
             isNextUp: true,
             shufflePlayback: shuffleSettings.enabled,
             ...releaseState,
-            title: meta.name || prettyId(contentId),
+            title: firstNonEmpty(meta.name === "Untitled" ? "" : meta.name, progressEntry?.title, prettyId(contentId)),
             landscapePoster: firstNonEmpty(
               meta.landscapePoster,
               meta.thumbnail,

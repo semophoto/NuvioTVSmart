@@ -213,6 +213,7 @@ export function createHomeScreenMethods04() {
         const constrained =
           (typeof this.isPerformanceConstrained === "function" && this.isPerformanceConstrained()) ||
           (typeof this.isLegacyTvRuntime === "function" && this.isLegacyTvRuntime()) ||
+          getTvRuntimePerformanceProfile()?.platform === "tizen" ||
           globalThis?.document?.body?.classList?.contains("legacy-tizen") ||
           globalThis?.document?.documentElement?.classList?.contains("legacy-tizen");
         if (constrained && Date.now() - Number(this.lastHomeInputAt || 0) < 800) {

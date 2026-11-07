@@ -364,7 +364,7 @@ export function createPosterCardMarkup(
       <div class="home-poster-frame">
         ${
           !isLoading && posterSrc
-            ? `<img class="content-poster" ${buildLazyImageAttributes(posterSrc, { defer: deferPosterImages })} alt="" data-original-poster="${escapeAttribute((useLandscapePoster ? normalized.rawLandscapePosterUrl : normalized.rawPosterUrl) || "")}" />`
+            ? `<div class="home-poster-fallback-title" aria-hidden="true">${escapeHtml(normalized.name || "")}</div><img class="content-poster" ${buildLazyImageAttributes(posterSrc, { defer: deferPosterImages })} alt="" data-original-poster="${escapeAttribute((useLandscapePoster ? normalized.rawLandscapePosterUrl : normalized.rawPosterUrl) || "")}" />`
             : '<div class="content-poster placeholder"></div>'
         }
         ${

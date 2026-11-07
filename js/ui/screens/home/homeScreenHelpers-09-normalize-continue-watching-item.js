@@ -259,7 +259,8 @@ export function isCloudContinueWatchingItem(item = {}) {
 export function isRawContinueWatchingTitle(item) {
   const contentId = String(item?.contentId || item?.id || "").trim();
   const title = firstNonEmpty(item?.title, item?.name);
-  return Boolean(title) && Boolean(contentId) && title === prettyId(contentId);
+  // "Untitled" is the placeholder for an addon meta without a name.
+  return Boolean(title) && Boolean(contentId) && (title === prettyId(contentId) || title === "Untitled");
 }
 
 export function hasContinueWatchingArtwork(item) {

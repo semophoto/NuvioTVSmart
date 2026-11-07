@@ -297,7 +297,9 @@ export function createSettingsScreenMethods12() {
           }
           if (sectionChanged) {
             contentSlot.classList.remove("is-section-transitioning");
-            if (hadContent) {
+            // The section fade is disabled on the TV fast path, so skip the
+            // forced layout that only exists to restart it.
+            if (hadContent && !ScreenUtils.isTizenFastPath(this)) {
               // Restart the transition on reused content; new content animates anyway.
               void contentSlot.offsetWidth;
             }

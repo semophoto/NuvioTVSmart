@@ -1,3 +1,4 @@
+import { findDirectTrailerSource } from "../../../core/util/directTrailerSource.js";
 import { Router } from "../../navigation/routerState.js";
 
 import { ScreenUtils } from "../../navigation/screen.js";
@@ -108,8 +109,9 @@ export function buildYoutubeEmbedUrl(ytId = "", { muted = false } = {}) {
       proxyUrl.searchParams.set("autoplay", "1");
       proxyUrl.searchParams.set("muted", muted ? "1" : "0");
       proxyUrl.searchParams.set("controls", "0");
-      proxyUrl.searchParams.set("loop", "1");
-      proxyUrl.searchParams.set("playlist", cleanId);
+      // The hosted proxy turns loop=1 into a one-video playlist, which makes
+      // YouTube draw previous/next buttons over the trailer.
+      proxyUrl.searchParams.set("loop", "0");
       proxyUrl.searchParams.set("playsinline", "1");
       proxyUrl.searchParams.set("rel", "0");
       proxyUrl.searchParams.set("cc_load_policy", "0");
@@ -126,8 +128,9 @@ export function buildYoutubeEmbedUrl(ytId = "", { muted = false } = {}) {
     autoplay: "1",
     mute: muted ? "1" : "0",
     controls: "0",
-    loop: "1",
-    playlist: cleanId,
+    // A one-video playlist (needed for loop) makes YouTube show
+    // previous/next buttons over the trailer.
+    loop: "0",
     playsinline: "1",
     rel: "0",
     modestbranding: "1",
@@ -157,12 +160,8 @@ export function buildInlineYoutubePlayerUrl(ytId = "", { muted = false, loop = f
       proxyUrl.searchParams.set("autoplay", "1");
       proxyUrl.searchParams.set("muted", muted ? "1" : "0");
       proxyUrl.searchParams.set("controls", "0");
-      proxyUrl.searchParams.set("loop", loop ? "1" : "0");
-      if (loop) {
-        proxyUrl.searchParams.set("playlist", cleanId);
-      } else {
-        proxyUrl.searchParams.delete("playlist");
-      }
+      // loop=1 makes the hosted proxy add a playlist (previous/next buttons).
+      proxyUrl.searchParams.set("loop", "0");
       proxyUrl.searchParams.set("playsinline", "1");
       proxyUrl.searchParams.set("rel", "0");
       proxyUrl.searchParams.set("cc_load_policy", "0");
@@ -183,9 +182,6 @@ export function buildInlineYoutubePlayerUrl(ytId = "", { muted = false, loop = f
     modestbranding: "1",
     enablejsapi: "1"
   });
-  if (loop) {
-    params.set("playlist", cleanId);
-  }
   const origin = String(globalThis?.location?.origin || "").trim();
   if (/^https?:\/\//i.test(origin)) {
     params.set("origin", origin);
@@ -194,6 +190,10 @@ export function buildInlineYoutubePlayerUrl(ytId = "", { muted = false, loop = f
 }
 
 export function resolveTrailerSource(meta = {}) {
+  const directSource = findDirectTrailerSource(meta);
+  if (directSource) {
+    return directSource;
+  }
   const trailerCandidates = [...(Array.isArray(meta?.trailers) ? meta.trailers : []), ...(Array.isArray(meta?.videos) ? meta.videos : [])];
   for (const entry of trailerCandidates) {
     const ytId = resolveYoutubeId(entry?.ytId || entry?.youtubeId || entry?.source || entry?.url || entry?.link || "");
@@ -226,6 +226,10 @@ export function resolveTrailerSource(meta = {}) {
 
 export async function resolveTmdbTrailerSource(meta = {}, itemType = "movie") {
   const fallbackSource = resolveTrailerSource(meta);
+  // TMDB only lists YouTube videos; an addon's own video file wins over it.
+  if (fallbackSource?.kind === "video") {
+    return fallbackSource;
+  }
   const settings = TmdbSettingsStore.get();
   if (!settings.enabled || !settings.useTrailers || !TMDB_API_KEY || !meta?.id) {
     return fallbackSource;

@@ -312,6 +312,30 @@ export function createHomeScreenMethods21() {
       });
 
       if (deferredDescriptors.length) {
+        // Re-sorting every row and rebuilding hero candidates per arriving
+        // catalog is O(rows^2) work. Collect rows and publish them together.
+        const pendingDeferredRows = new Map();
+        let deferredFlushTimer = null;
+        const flushDeferredRows = () => {
+          if (deferredFlushTimer) {
+            clearTimeout(deferredFlushTimer);
+            deferredFlushTimer = null;
+          }
+          if (!pendingDeferredRows.size || token !== this.homeLoadToken || Router.getCurrent() !== "home") {
+            pendingDeferredRows.clear();
+            return;
+          }
+          const combinedByKey = new Map((this.rows || []).map((entry) => [entry.homeCatalogKey, entry]));
+          pendingDeferredRows.forEach((row, key) => combinedByKey.set(key, row));
+          pendingDeferredRows.clear();
+          this.rows = this.sortAndFilterRows(Array.from(combinedByKey.values()), this.collections);
+          this.heroCandidates = uniqueById(this.collectHeroCandidates(this.rows));
+          if (!this.heroItem) {
+            this.heroItem = this.pickInitialHero();
+          }
+          void this.refreshWatchedTitleState({ token });
+          this.requestBackgroundRender();
+        };
         this.fetchCatalogRows(deferredDescriptors, {
           allowLoading: true,
           prefetchedResults,
@@ -322,18 +346,18 @@ export function createHomeScreenMethods21() {
             if (token !== this.homeLoadToken || Router.getCurrent() !== "home") {
               return;
             }
-            const combinedByKey = new Map((this.rows || []).map((entry) => [entry.homeCatalogKey, entry]));
-            combinedByKey.set(row.homeCatalogKey, row);
-            this.rows = this.sortAndFilterRows(Array.from(combinedByKey.values()), this.collections);
-            this.heroCandidates = uniqueById(this.collectHeroCandidates(this.rows));
-            if (!this.heroItem) {
-              this.heroItem = this.pickInitialHero();
+            pendingDeferredRows.set(row.homeCatalogKey, row);
+            if (!deferredFlushTimer) {
+              deferredFlushTimer = setTimeout(flushDeferredRows, this.getBackgroundRenderDelay());
             }
-            void this.refreshWatchedTitleState({ token });
-            this.requestBackgroundRender();
           }
         })
           .then((extraRows) => {
+            if (deferredFlushTimer) {
+              clearTimeout(deferredFlushTimer);
+              deferredFlushTimer = null;
+            }
+            pendingDeferredRows.clear();
             if (token !== this.homeLoadToken || Router.getCurrent() !== "home") {
               return;
             }

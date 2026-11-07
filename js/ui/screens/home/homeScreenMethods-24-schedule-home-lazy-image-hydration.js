@@ -7,6 +7,7 @@ import {
   getHomeArtworkObjectFit,
   isRescalableArtworkFit
 } from "../../images/tvPosterRescaler.js";
+import { isTizenRescalableArtwork } from "../../images/tizenPosterTuning.js";
 
 export function createHomeScreenMethods24() {
   const imageRequests = new WeakMap();
@@ -314,7 +315,7 @@ export function createHomeScreenMethods24() {
       image.removeAttribute("data-src");
       // Only posters are worth rescaling. Logos carry transparency a JPEG
       // would flatten, and they are small enough not to matter.
-      if (!shouldRescaleHomeArtwork() || !image.classList.contains("content-poster")) {
+      if (!shouldRescaleHomeArtwork() || !(image.classList.contains("content-poster") || isTizenRescalableArtwork(image))) {
         image.src = src;
         return;
       }
