@@ -1,4 +1,12 @@
 import { getTvRuntimePerformanceProfile } from "../../platform/tvRuntimePerformance.js";
+// Fork: Tizen sharpness and disk cache. See tizenPosterTuning.js.
+import {
+  TIZEN_ARTWORK_QUALITY,
+  getTizenArtworkScale,
+  isTizenArtworkTuningActive,
+  readPersistedArtwork,
+  writePersistedArtwork
+} from "./tizenPosterTuning.js";
 
 // Android decodes artwork at the size Compose is going to draw it: Coil is
 // configured with precision(INEXACT) and hands BitmapFactory the target bounds,
@@ -67,12 +75,40 @@ export function isJpegHeader(bytes) {
   );
 }
 
+/**
+ * Fork: classify a non-JPEG source. Still PNG and WebP can be re-encoded as
+ * WebP, which keeps transparency; anything animated or unknown is left alone.
+ */
+export function classifyStillImage(bytes) {
+  const ascii = (start, text) => {
+    for (let index = 0; index < text.length; index += 1) {
+      if (bytes[start + index] !== text.charCodeAt(index)) return false;
+    }
+    return true;
+  };
+  if (!bytes || bytes.length < 21) return "unknown";
+  if (bytes[0] === 0x89 && ascii(1, "PNG")) {
+    for (let index = 8; index + 4 <= bytes.length; index += 1) {
+      if (ascii(index, "IDAT")) return "png";
+      if (ascii(index, "acTL")) return "animated";
+    }
+    return "png";
+  }
+  if (ascii(0, "RIFF") && ascii(8, "WEBP")) {
+    if (ascii(12, "VP8X") && (bytes[20] & 0x02) !== 0) return "animated";
+    return "webp";
+  }
+  if (ascii(0, "GIF8")) return "animated";
+  return "unknown";
+}
+
 const WORKER_SOURCE = `
 const sourceRect = ${computeSourceRect.toString()};
 const isJpeg = ${isJpegHeader.toString()};
+const classifyStill = ${classifyStillImage.toString()};
 
 self.onmessage = async (event) => {
-  const { id, url, width, height, fit } = event.data || {};
+  const { id, url, width, height, fit, quality = 0.82, allowStill = false } = event.data || {};
   let full = null;
   try {
     const response = await fetch(url, { credentials: "omit" });
@@ -83,9 +119,18 @@ self.onmessage = async (event) => {
     // is newer than OffscreenCanvas, so some webOS builds have the canvas but
     // not the blob method.
     const bytes = await response.arrayBuffer();
+    let outType = "image/jpeg";
     if (!isJpeg(new Uint8Array(bytes, 0, Math.min(3, bytes.byteLength)))) {
-      // Could carry transparency or animation. Leave it to the <img> tag.
-      throw new Error("not jpeg");
+      // Could carry transparency or animation. Leave it to the <img> tag,
+      // unless it is a still PNG or WebP and the caller allows a WebP copy.
+      const kind = allowStill ? classifyStill(new Uint8Array(bytes, 0, Math.min(65536, bytes.byteLength))) : "unknown";
+      if (kind === "animated") {
+        throw new Error("animated");
+      }
+      if (kind !== "png" && kind !== "webp") {
+        throw new Error("not jpeg");
+      }
+      outType = "image/webp";
     }
     full = await createImageBitmap(new Blob([bytes]));
     if (full.width <= width && full.height <= height) {
@@ -94,8 +139,8 @@ self.onmessage = async (event) => {
     }
     const crop = sourceRect(full.width, full.height, width, height, fit);
     const canvas = new OffscreenCanvas(width, height);
-    canvas.getContext("2d", { alpha: false }).drawImage(full, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, width, height);
-    const out = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+    canvas.getContext("2d", { alpha: outType !== "image/jpeg" }).drawImage(full, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, width, height);
+    const out = await canvas.convertToBlob({ type: outType, quality });
     full.close();
     full = null;
     self.postMessage({ id, ok: true, blob: out });
@@ -150,6 +195,10 @@ function isSupported() {
  * a 4K panel that lays the app out at 1920.
  */
 export function getHomeArtworkPixelRatio() {
+  const tizenScale = getTizenArtworkScale();
+  if (tizenScale) {
+    return tizenScale;
+  }
   const viewportWidth = Number(globalThis.innerWidth) || 0;
   const screenWidth = Number(globalThis.screen?.width) || 0;
   const measured = viewportWidth > 0 && screenWidth > 0 ? screenWidth / viewportWidth : 1;
@@ -293,7 +342,8 @@ function pump(state) {
       url: job.url,
       width: job.width,
       height: job.height,
-      fit: job.fit
+      fit: job.fit,
+      ...(isTizenArtworkTuningActive() ? { quality: TIZEN_ARTWORK_QUALITY, allowStill: true } : {})
     });
   }
 }
@@ -381,7 +431,7 @@ export function rescaleHomeArtwork(url, { width, height, fit, priority = 2, isSt
     waiters: 1
   };
   job.promise = new Promise((resolve) => {
-    job.settle = (blob) => {
+    job.settle = (blob, reason) => {
       // A timeout and a late reply can both land, and settling twice would
       // leak a second object url for the same job.
       if (job.done) {
@@ -389,6 +439,9 @@ export function rescaleHomeArtwork(url, { width, height, fit, priority = 2, isSt
       }
       job.done = true;
       state.inflight.delete(key);
+      if (!job.fromDisk && !state.disposed) {
+        writePersistedArtwork(key, blob, reason);
+      }
       if (!blob || state.disposed) {
         resolve(null);
         return;
@@ -401,8 +454,24 @@ export function rescaleHomeArtwork(url, { width, height, fit, priority = 2, isSt
     };
   });
   state.inflight.set(key, job);
-  state.queue.push(job);
-  pump(state);
+  if (!isTizenArtworkTuningActive()) {
+    state.queue.push(job);
+    pump(state);
+    return job.promise;
+  }
+  // Fork: a stored copy skips the download and the worker entirely.
+  readPersistedArtwork(key).then((entry) => {
+    if (job.done) {
+      return;
+    }
+    if (entry) {
+      job.fromDisk = true;
+      job.settle(entry.blob);
+      return;
+    }
+    state.queue.push(job);
+    pump(state);
+  });
   return job.promise;
 }
 
